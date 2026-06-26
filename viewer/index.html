@@ -8,63 +8,99 @@
     html, body { margin: 0; height: 100%; overflow: hidden; background: #000; }
     #info {
       position: fixed; bottom: 12px; left: 50%; transform: translateX(-50%);
-      color: #ccc; font: 13px system-ui, sans-serif; opacity: 0.8;
+      color: #ccc; font: 13px system-ui, sans-serif; opacity: 0.8; text-align: center;
+      max-width: 90vw;
     }
-    #loadBtn {
+    #error {
+      position: fixed; top: 56px; left: 12px; right: 12px; z-index: 3;
+      color: #ff6b6b; background: rgba(0,0,0,0.7); border: 1px solid #ff6b6b;
+      font: 12px/1.4 ui-monospace, monospace; padding: 8px; white-space: pre-wrap;
+      display: none; max-height: 40vh; overflow: auto;
+    }
+    #fileInput {
       position: fixed; top: 12px; left: 12px; z-index: 2;
-      font: 13px system-ui, sans-serif; padding: 6px 10px;
+      font: 13px system-ui, sans-serif;
     }
   </style>
 </head>
 <body>
-  <input id="fileInput" type="file" accept=".glb" style="position:fixed;top:12px;left:12px;z-index:2;" />
+  <input id="fileInput" type="file" accept=".glb" />
+  <div id="error"></div>
   <div id="info">Demo mesh loads automatically. Tap "Enter VR" to view in stereo, or pick a different .glb above.</div>
 
   <script type="module">
-    import * as THREE from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js";
-    import { GLTFLoader } from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/examples/jsm/loaders/GLTFLoader.min.js";
-    import { VRButton } from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/examples/jsm/webxr/VRButton.min.js";
-
-    const scene = new THREE.Scene();
-    const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
-    // Start at the capture origin — this is the point the mesh was displaced
-    // around, so head movement away from (0,0,0) is what produces parallax.
-    camera.position.set(0, 0, 0);
-
-    const renderer = new THREE.WebGLRenderer({ antialias: true });
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    document.body.appendChild(renderer.domElement);
-    document.body.appendChild(VRButton.createButton(renderer));
-
-    window.addEventListener("resize", () => {
-      camera.aspect = window.innerWidth / window.innerHeight;
-      camera.updateProjectionMatrix();
-      renderer.setSize(window.innerWidth, window.innerHeight);
-    });
-
-    const loader = new GLTFLoader();
-    let currentMesh = null;
-
-    function loadGLB(url) {
-      if (currentMesh) scene.remove(currentMesh);
-      loader.load(url, (gltf) => {
-        currentMesh = gltf.scene;
-        scene.add(currentMesh);
-      });
+    // On-screen error surface — this page mostly gets debugged from a phone
+    // with no devtools attached, so failures need to be visible in-page.
+    const errorBox = document.getElementById("error");
+    function showError(label, err) {
+      console.error(label, err);
+      errorBox.style.display = "block";
+      errorBox.textContent += `[${label}] ${err?.message || err}\n`;
     }
+    window.addEventListener("error", (e) => showError("script", e.error || e.message));
+    window.addEventListener("unhandledrejection", (e) => showError("promise", e.reason));
 
-    document.getElementById("fileInput").addEventListener("change", (e) => {
-      const file = e.target.files[0];
-      if (file) loadGLB(URL.createObjectURL(file));
-    });
+    try {
+      const THREE_VERSION = "0.160.0";
+      const [THREE, { GLTFLoader }, { VRButton }] = await Promise.all([
+        import(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.module.js`),
+        import(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/examples/jsm/loaders/GLTFLoader.js`),
+        import(`https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/examples/jsm/webxr/VRButton.js`),
+      ]);
 
-    // Convenience: ?glb=path/to/file.glb to load directly (e.g. from the CLI output).
-    // Falls back to the bundled demo.glb so the page is useful with no query string.
-    const params = new URLSearchParams(window.location.search);
-    loadGLB(params.get("glb") || "demo.glb");
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 50);
+      // Start at the capture origin — this is the point the mesh was displaced
+      // around, so head movement away from (0,0,0) is what produces parallax.
+      camera.position.set(0, 0, 0);
 
-    renderer.setAnimationLoop(() => renderer.render(scene, camera));
+      const renderer = new THREE.WebGLRenderer({ antialias: true });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.xr.enabled = true;
+      document.body.appendChild(renderer.domElement);
+
+      if (navigator.xr) {
+        document.body.appendChild(VRButton.createButton(renderer));
+      } else {
+        showError("webxr", "navigator.xr is unavailable in this browser (try Chrome on Android; Safari/iOS has no WebXR).");
+      }
+
+      window.addEventListener("resize", () => {
+        camera.aspect = window.innerWidth / window.innerHeight;
+        camera.updateProjectionMatrix();
+        renderer.setSize(window.innerWidth, window.innerHeight);
+      });
+
+      const loader = new GLTFLoader();
+      let currentMesh = null;
+
+      function loadGLB(url) {
+        if (currentMesh) scene.remove(currentMesh);
+        loader.load(
+          url,
+          (gltf) => {
+            currentMesh = gltf.scene;
+            scene.add(currentMesh);
+          },
+          undefined,
+          (err) => showError("glb-load:" + url, err)
+        );
+      }
+
+      document.getElementById("fileInput").addEventListener("change", (e) => {
+        const file = e.target.files[0];
+        if (file) loadGLB(URL.createObjectURL(file));
+      });
+
+      // Convenience: ?glb=path/to/file.glb to load directly (e.g. from the CLI output).
+      // Falls back to the bundled demo.glb so the page is useful with no query string.
+      const params = new URLSearchParams(window.location.search);
+      loadGLB(params.get("glb") || "demo.glb");
+
+      renderer.setAnimationLoop(() => renderer.render(scene, camera));
+    } catch (err) {
+      showError("init", err);
+    }
   </script>
 </body>
 </html>
