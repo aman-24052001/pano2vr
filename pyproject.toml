@@ -1,0 +1,26 @@
+[project]
+name = "pano2vr"
+version = "0.1.0"
+description = "Single panorama -> depth-displaced VR mesh, designed for on-device math."
+requires-python = ">=3.10"
+dependencies = [
+    "numpy>=1.26",
+    "pillow>=10.0",
+    "trimesh>=4.0",
+    "pygltflib>=1.16",
+    "typer>=0.12",
+]
+
+[project.optional-dependencies]
+onnx = ["onnxruntime>=1.17"]
+dev = ["pytest>=8.0"]
+
+[project.scripts]
+pano2vr = "pano2vr.cli:app"
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
