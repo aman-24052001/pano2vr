@@ -18,7 +18,7 @@
 </head>
 <body>
   <input id="fileInput" type="file" accept=".glb" style="position:fixed;top:12px;left:12px;z-index:2;" />
-  <div id="info">Drag/select a .glb, then tap "Enter VR" (button injected by three.js when a headset/phone supports WebXR).</div>
+  <div id="info">Demo mesh loads automatically. Tap "Enter VR" to view in stereo, or pick a different .glb above.</div>
 
   <script type="module">
     import * as THREE from "https://cdnjs.cloudflare.com/ajax/libs/three.js/0.160.0/three.module.min.js";
@@ -59,9 +59,10 @@
       if (file) loadGLB(URL.createObjectURL(file));
     });
 
-    // Convenience: ?glb=path/to/file.glb to load directly (e.g. from the CLI output)
+    // Convenience: ?glb=path/to/file.glb to load directly (e.g. from the CLI output).
+    // Falls back to the bundled demo.glb so the page is useful with no query string.
     const params = new URLSearchParams(window.location.search);
-    if (params.get("glb")) loadGLB(params.get("glb"));
+    loadGLB(params.get("glb") || "demo.glb");
 
     renderer.setAnimationLoop(() => renderer.render(scene, camera));
   </script>
